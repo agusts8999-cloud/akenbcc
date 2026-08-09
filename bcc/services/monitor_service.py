@@ -48,7 +48,7 @@ class MonitorService:
     def target_disk_slices(self, target_id: int) -> dict[str, Any]:
         """
         Pie breakdown of filesystem holding target base_path:
-        Free + per source_label folder + residual Lainnya.
+        Free + per VPS/PC (inventory label; size from source_label folder) + residual Lainnya.
         """
         t = self.repo.get_target(target_id)
         if not t:
@@ -123,18 +123,18 @@ class MonitorService:
             if name:
                 folder_bytes[name] = folder_bytes.get(name, 0) + size
 
-        known_labels: set[str] = set()
+        # Match disk folders by source_label; show inventory `label` as pie title
         ordered_known: list[tuple[str, int]] = []
-        seen: set[str] = set()
+        seen_folders: set[str] = set()
         for s in self.repo.list_sources():
             if int(s.get("target_id") or 0) != int(target_id):
                 continue
-            lab = (s.get("source_label") or "").strip()
-            if not lab or lab in seen:
+            folder = (s.get("source_label") or "").strip()
+            if not folder or folder in seen_folders:
                 continue
-            seen.add(lab)
-            known_labels.add(lab)
-            ordered_known.append((lab, folder_bytes.get(lab, 0)))
+            seen_folders.add(folder)
+            title = (s.get("label") or "").strip() or folder
+            ordered_known.append((title, folder_bytes.get(folder, 0)))
 
         known_sum = sum(sz for _, sz in ordered_known)
         residual = max(0, used - known_sum)
@@ -157,11 +157,11 @@ class MonitorService:
         slices: list[dict[str, Any]] = [
             {"label": "Free", "bytes": free, "pct": pct(free), "kind": "free"}
         ]
-        for lab, sz in ordered_known:
+        for title, sz in ordered_known:
             if sz <= 0:
                 continue
             slices.append(
-                {"label": lab, "bytes": sz, "pct": pct(sz), "kind": "source"}
+                {"label": title, "bytes": sz, "pct": pct(sz), "kind": "source"}
             )
         if residual > 0:
             slices.append(

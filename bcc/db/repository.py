@@ -29,6 +29,34 @@ class Repository:
             conn.executescript(SCHEMA_SQL)
             self._migrate(conn)
             conn.commit()
+        try:
+            from bcc.services.notify_service import NotifyService
+
+            NotifyService(self).ensure_defaults()
+        except Exception:
+            pass
+
+    def _fire_notify(
+        self,
+        event: str,
+        status: str,
+        subject: str,
+        body: str,
+        source_id: Optional[int] = None,
+    ) -> None:
+        """Async notify; never raise into CRUD callers."""
+        try:
+            from bcc.services.notify_service import NotifyService
+
+            NotifyService(self).notify(
+                event=event,
+                status=status,
+                subject=subject,
+                body=body,
+                source_id=source_id,
+            )
+        except Exception:
+            pass
 
     def _migrate(self, conn: sqlite3.Connection) -> None:
         """Idempotent column adds for existing DBs."""
@@ -103,7 +131,14 @@ class Repository:
                 VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (label, host, port, username, pwd, key_path, base_path, notes, now, now),
             )
-            return int(cur.lastrowid)
+            tid = int(cur.lastrowid)
+        self._fire_notify(
+            "target_add",
+            "ok",
+            f"BCC: target ditambah — {label}",
+            f"Target id={tid} label={label} host={host} path={base_path}",
+        )
+        return tid
 
     def update_target(self, target_id: int, **fields: Any) -> None:
         if not fields:
@@ -116,9 +151,26 @@ class Repository:
         vals = list(fields.values()) + [target_id]
         with self.connect() as conn:
             conn.execute(f"UPDATE backup_targets SET {cols} WHERE id=?", vals)
+        keys = ", ".join(k for k in fields if k != "updated_at")
+        self._fire_notify(
+            "target_update",
+            "ok",
+            f"BCC: target diubah — id {target_id}",
+            f"Target id={target_id} fields: {keys or '-'}",
+        )
 
     def soft_delete_target(self, target_id: int) -> None:
-        self.update_target(target_id, deleted=1)
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE backup_targets SET deleted=1, updated_at=? WHERE id=?",
+                (_now(), target_id),
+            )
+        self._fire_notify(
+            "target_delete",
+            "ok",
+            f"BCC: target dihapus — id {target_id}",
+            f"Target id={target_id} soft-deleted",
+        )
 
     def target_password(self, target: dict[str, Any]) -> str:
         return self.secrets.decrypt(target.get("password_enc") or "")
@@ -237,9 +289,18 @@ class Repository:
                 VALUES (?,?,?,?,?,?,?,?)""",
                 (sid, 2, 0, 3, 0, 1, 60, now),
             )
-            return sid
+        self._fire_notify(
+            "source_add",
+            "ok",
+            f"BCC: sumber ditambah — {label}",
+            f"Source id={sid} label={label} host={host} role={role}",
+            source_id=sid,
+        )
+        return sid
 
     def update_source(self, source_id: int, **fields: Any) -> None:
+        if not fields:
+            return
         if "password" in fields:
             pw = fields.pop("password")
             fields["password_enc"] = self.secrets.encrypt(pw) if pw is not None else ""
@@ -253,9 +314,32 @@ class Repository:
         vals = list(fields.values()) + [source_id]
         with self.connect() as conn:
             conn.execute(f"UPDATE sources SET {cols} WHERE id=?", vals)
+        # Soft-delete uses dedicated event via soft_delete_source
+        if fields.get("deleted") == 1 or set(fields.keys()) <= {"deleted", "updated_at"}:
+            if fields.get("deleted") == 1:
+                return
+        keys = ", ".join(k for k in fields if k != "updated_at")
+        self._fire_notify(
+            "source_update",
+            "ok",
+            f"BCC: sumber diubah — id {source_id}",
+            f"Source id={source_id} fields: {keys or '-'}",
+            source_id=source_id,
+        )
 
     def soft_delete_source(self, source_id: int) -> None:
-        self.update_source(source_id, deleted=1)
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE sources SET deleted=1, updated_at=? WHERE id=?",
+                (_now(), source_id),
+            )
+        self._fire_notify(
+            "source_delete",
+            "ok",
+            f"BCC: sumber dihapus — id {source_id}",
+            f"Source id={source_id} soft-deleted",
+            source_id=source_id,
+        )
 
     def source_password(self, source: dict[str, Any]) -> str:
         return self.secrets.decrypt(source.get("password_enc") or "")
@@ -311,6 +395,18 @@ class Repository:
                     source_id,
                 ),
             )
+        self._fire_notify(
+            "schedule_update",
+            "ok",
+            f"BCC: jadwal diubah — source {source_id}",
+            (
+                f"Source id={source_id} "
+                f"web={web_hour:02d}:{web_minute:02d} "
+                f"db={db_hour:02d}:{db_minute:02d} "
+                f"enabled={enabled} est_web_min={estimated_web_minutes}"
+            ),
+            source_id=source_id,
+        )
 
     def add_run_history(
         self, source_id: int, run_type: str, status: str, message: str
@@ -321,6 +417,23 @@ class Repository:
                 VALUES (?,?,?,?,?)""",
                 (source_id, run_type, status, message, _now()),
             )
+        label = ""
+        try:
+            src = self.get_source(source_id) if source_id else None
+            if src:
+                label = src.get("label") or ""
+        except Exception:
+            pass
+        subj = f"BCC [{status}] {run_type}"
+        if label:
+            subj += f" — {label}"
+        self._fire_notify(
+            "run_history",
+            status or "info",
+            subj,
+            f"run_type={run_type}\nstatus={status}\nsource_id={source_id}\n{message or ''}",
+            source_id=source_id if source_id else None,
+        )
 
     def recent_history(self, limit: int = 20) -> list[dict[str, Any]]:
         with self.connect() as conn:
