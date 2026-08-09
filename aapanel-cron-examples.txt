@@ -1,0 +1,37 @@
+# Contoh Plan Task (Cron) aaPanel
+# Panel → Plan Task → Add Task → Type: Shell Script
+#
+# Catatan: jalankan install + setup-ssh dulu di server aaPanel.
+
+# =============================================================================
+# Opsi A — satu cron (web + DB)
+# =============================================================================
+# Name: Backup All (Web+DB) to Webmin
+# Execution cycle: N Days → every 1 day → 02:00
+#  or crontab style: 0 2 * * *
+#
+# Script content:
+bash /www/backup-scripts/backup-all.sh
+
+
+# =============================================================================
+# Opsi B — terpisah (disarankan)
+# =============================================================================
+
+# --- Cron 1: Website ---
+# Name: Backup Websites
+# Cycle: 0 2 * * *   (02:00)
+bash /www/backup-scripts/backup-webs.sh
+
+# --- Cron 2: Database ---
+# Name: Backup Databases
+# Cycle: 0 3 * * *   (03:00)
+bash /www/backup-scripts/backup-dbs.sh
+
+
+# =============================================================================
+# Manual crontab (jika root, alternatif aaPanel UI)
+# =============================================================================
+# crontab -e
+# 0 2 * * * /bin/bash /www/backup-scripts/backup-webs.sh >> /www/backup-scripts/logs/cron-webs.log 2>&1
+# 0 3 * * * /bin/bash /www/backup-scripts/backup-dbs.sh  >> /www/backup-scripts/logs/cron-dbs.log 2>&1

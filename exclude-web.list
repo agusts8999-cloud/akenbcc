@@ -1,0 +1,19 @@
+# Pola file/folder di-skip saat tar website (satu baris satu pola)
+*.log
+*.tmp
+*.cache
+*/runtime/cache/*
+*/runtime/temp/*
+*/storage/framework/cache/*
+*/storage/framework/sessions/*
+*/storage/framework/views/*
+*/storage/logs/*
+*/node_modules/*
+*/.git/*
+*/.svn/*
+*/.cache/*
+*/cache/*
+*/tmp/*
+*/temp/*
+*.sock
+*.pid

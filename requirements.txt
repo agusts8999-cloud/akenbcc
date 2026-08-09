@@ -1,0 +1,10 @@
+# Backup Control Center
+customtkinter>=5.2.0
+paramiko>=3.4.0
+cryptography>=42.0.0
+keyring>=25.0.0
+psutil>=5.9.0
+Pillow>=10.0.0
+
+# Build EXE (optional): pip install pyinstaller
+# python build_exe.py  →  dist/BackupControlCenter-{version}-{build}.exe

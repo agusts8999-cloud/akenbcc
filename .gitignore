@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+*.log
+
+# App secrets / local DB
+*.db
+*.sqlite
+*.sqlite3
+bcc.db
+.vault*
+*_enc*
+
+# Server credentials (never commit live passwords)
+/config.sh
+/seed_existing_servers.py
+/finish_vps2_mesh.py
+/deploy_remote.py
+/register_aapanel_cron.py
+# allow examples if you add them:
+!seed_existing_servers.example.py
+!config.example.sh
+
+# PyInstaller / package
+build/
+dist/
+*.spec
+bcc_version_info.txt
+*.exe
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local tooling
+.cursor/
+agent-transcripts/
