@@ -51,6 +51,7 @@ class TargetsView(ctk.CTkFrame):
             ("username", "User SSH"),
             ("password", "Password (opsional)"),
             ("base_path", "Base path backup"),
+            ("webmin_url", "Webmin URL (kosong = https://host:10000)"),
             ("notes", "Catatan"),
         ]
         for i, (key, label) in enumerate(fields):
@@ -115,6 +116,7 @@ class TargetsView(ctk.CTkFrame):
             "username": t["username"],
             "password": "",
             "base_path": t["base_path"],
+            "webmin_url": t.get("webmin_url") or "",
             "notes": t.get("notes") or "",
         }
         for k, v in mapping.items():
@@ -134,6 +136,7 @@ class TargetsView(ctk.CTkFrame):
                 "port": port,
                 "username": data["username"],
                 "base_path": data["base_path"],
+                "webmin_url": data.get("webmin_url") or "",
                 "notes": data["notes"],
             }
             if data["password"]:
@@ -148,6 +151,7 @@ class TargetsView(ctk.CTkFrame):
                 port=port,
                 password=data["password"],
                 notes=data["notes"],
+                webmin_url=data.get("webmin_url") or "",
             )
         self.status.configure(text="Tersimpan.")
         self.refresh()

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS backup_targets (
     password_enc TEXT,
     key_path TEXT,
     base_path TEXT NOT NULL DEFAULT '/home/backupuser/backups',
+    webmin_url TEXT DEFAULT '',
     notes TEXT DEFAULT '',
     last_ssh_ok INTEGER,
     last_ssh_at TEXT,

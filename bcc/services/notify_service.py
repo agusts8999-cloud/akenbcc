@@ -23,7 +23,8 @@ SMTP_DEFAULTS = {
     "smtp_port": "465",
     "smtp_user": "admin@akenpro.com",
     "smtp_from": "admin@akenpro.com",
-    "notify_to": "",
+    "notify_to": "akenprodev@gmail.com",
+    "daily_report_enabled": "1",
     "notify_wa_phone": "+6281219752227",
     "notify_wa_enabled": "0",
     "notify_wa_provider": "fonnte",
@@ -116,10 +117,16 @@ class NotifyService:
         subj = payload.get("subject") or payload.get("event")
         return f"BCC [{payload.get('status')}] {subj}\n{(payload.get('body') or '')[:800]}"
 
-    def _send_email(self, subject: str, body: str) -> str:
+    def send_email_to(self, to_addr: str, subject: str, body: str) -> str:
+        """Send plain text email to an explicit address (respects notify_email_enabled)."""
+        return self._send_email(subject, body, to_override=to_addr)
+
+    def _send_email(
+        self, subject: str, body: str, to_override: Optional[str] = None
+    ) -> str:
         if self.repo.get_setting("notify_email_enabled", "1") != "1":
             return "disabled"
-        to_addr = (self.repo.get_setting("notify_to") or "").strip()
+        to_addr = (to_override or self.repo.get_setting("notify_to") or "").strip()
         if not to_addr:
             return "no_to"
         host = (self.repo.get_setting("smtp_host") or SMTP_DEFAULTS["smtp_host"]).strip()

@@ -1,14 +1,17 @@
-"""Dashboard tab with CTk-native status tables and disk pie chart."""
+"""Dashboard tab with CTk-native status tables, disk pie, daily report, Webmin links."""
 
 from __future__ import annotations
 
 import threading
+import webbrowser
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 import customtkinter as ctk
 
+from bcc.services.arrival_service import BackupArrivalService
 from bcc.services.monitor_service import MonitorService, human_bytes
+from bcc.services.report_service import ReportService
 from bcc.services.schedule_planner import detect_conflicts
 from bcc.services.tailscale_service import TailscaleService
 from bcc.ui.pie_chart import render_pie, slice_colors
@@ -41,16 +44,34 @@ def _trunc(text: Optional[str], n: int = 36) -> str:
     return t[: n - 1] + "…"
 
 
+def webmin_url_for(target: dict[str, Any]) -> str:
+    url = (target.get("webmin_url") or "").strip()
+    if url:
+        return url
+    host = (target.get("host") or "").strip()
+    if not host:
+        return ""
+    if host.startswith("http://") or host.startswith("https://"):
+        return host
+    return f"https://{host}:10000"
+
+
 class DashboardView(ctk.CTkFrame):
     def __init__(self, master, repo: Repository, app) -> None:
         super().__init__(master, fg_color="transparent")
         self.repo = repo
         self.app = app
         self.monitor = MonitorService(repo)
+        self.reports = ReportService(repo)
+        self.reports.ensure_defaults()
+        self.arrival = BackupArrivalService(repo)
+        self.arrival.ensure_defaults()
         self.ts = TailscaleService()
         self._target_menu_map: dict[str, int] = {}
         self._pie_image = None  # keep ref for CTkImage
         self._disk_loading = False
+        self._auto_report_started = False
+        self._arrival_scanning = False
 
         self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.scroll.pack(fill="both", expand=True)
@@ -76,6 +97,13 @@ class DashboardView(ctk.CTkFrame):
         ctk.CTkButton(
             bar, text="Cek semua SSH", width=140, command=self._check_all_ssh
         ).pack(side="left", padx=8)
+        ctk.CTkButton(
+            bar, text="Scan backup masuk", width=150, command=self._scan_arrivals_force
+        ).pack(side="left", padx=8)
+        self.lbl_arrival_status = ctk.CTkLabel(
+            self.scroll, text="", text_color="gray", anchor="w"
+        )
+        self.lbl_arrival_status.pack(anchor="w", pady=(4, 0))
 
         # --- Disk pie ---
         ctk.CTkLabel(
@@ -102,6 +130,31 @@ class DashboardView(ctk.CTkFrame):
         self.legend_frame = ctk.CTkFrame(pie_row, fg_color="transparent")
         self.legend_frame.pack(side="left", fill="both", expand=True, padx=12, pady=12)
 
+        # --- Laporan backup per tanggal ---
+        ctk.CTkLabel(
+            self.scroll,
+            text="Laporan backup",
+            font=ctk.CTkFont(size=15, weight="bold"),
+        ).pack(anchor="w", pady=(14, 4))
+        report_bar = ctk.CTkFrame(self.scroll, fg_color="transparent")
+        report_bar.pack(fill="x")
+        ctk.CTkLabel(report_bar, text="Tanggal (YYYY-MM-DD)").pack(side="left", padx=(0, 6))
+        self.report_date = ctk.CTkEntry(report_bar, width=120)
+        self.report_date.insert(0, self.reports.today_local())
+        self.report_date.pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            report_bar, text="Tampilkan", width=100, command=self._show_report
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            report_bar, text="Kirim email laporan", width=150, command=self._send_report_email
+        ).pack(side="left")
+        self.lbl_report_status = ctk.CTkLabel(
+            self.scroll, text="", text_color="gray", anchor="w"
+        )
+        self.lbl_report_status.pack(anchor="w", pady=(2, 2))
+        self.report_box = ctk.CTkTextbox(self.scroll, height=160)
+        self.report_box.pack(fill="x", pady=(0, 4))
+
         # --- Server Backup table ---
         ctk.CTkLabel(
             self.scroll, text="Server Backup", font=ctk.CTkFont(size=15, weight="bold")
@@ -118,6 +171,7 @@ class DashboardView(ctk.CTkFrame):
             "SSH",
             "SSH dicek",
             "Catatan",
+            "Webmin",
         )
 
         # --- Sources table ---
@@ -200,6 +254,125 @@ class DashboardView(ctk.CTkFrame):
                     fg_color=bg,
                     corner_radius=0,
                 ).grid(row=r_i, column=c_i, sticky="nsew", padx=0, pady=0)
+
+    def _fill_targets_table(self, targets: list[dict[str, Any]]) -> None:
+        frame = self.tbl_targets
+        self._clear_table(frame)
+        headers = self._target_headers
+        bold = ctk.CTkFont(size=11, weight="bold")
+        body = ctk.CTkFont(size=11)
+        for col, h in enumerate(headers):
+            ctk.CTkLabel(
+                frame,
+                text=h,
+                font=bold,
+                anchor="w",
+                padx=6,
+                pady=4,
+            ).grid(row=0, column=col, sticky="ew", padx=1, pady=1)
+            frame.grid_columnconfigure(col, weight=1, minsize=48)
+
+        if not targets:
+            ctk.CTkLabel(
+                frame, text="(kosong)", text_color="gray", anchor="w", padx=6
+            ).grid(row=1, column=0, columnspan=len(headers), sticky="w", pady=6)
+            return
+
+        for r_i, t in enumerate(targets, start=1):
+            bg = ("gray90", "gray22") if r_i % 2 == 0 else ("gray95", "gray17")
+            host = t.get("host") or ""
+            cells = [
+                t.get("label") or "",
+                host,
+                t.get("username") or "",
+                t.get("base_path") or "",
+                "Ya" if TailscaleService.is_tailscale_ip(host) else "Tidak",
+                str(t.get("source_count") or 0),
+                _ssh_label(t.get("last_ssh_ok")),
+                t.get("last_ssh_at") or "-",
+                _trunc(t.get("notes"), 36),
+            ]
+            for c_i, cell in enumerate(cells):
+                ctk.CTkLabel(
+                    frame,
+                    text=str(cell),
+                    font=body,
+                    anchor="w",
+                    padx=6,
+                    pady=3,
+                    fg_color=bg,
+                    corner_radius=0,
+                ).grid(row=r_i, column=c_i, sticky="nsew", padx=0, pady=0)
+            url = webmin_url_for(t)
+            ctk.CTkButton(
+                frame,
+                text="Buka",
+                width=56,
+                height=24,
+                font=body,
+                command=lambda u=url: self._open_webmin(u),
+            ).grid(row=r_i, column=len(cells), sticky="w", padx=4, pady=2)
+
+    def _open_webmin(self, url: str) -> None:
+        if not url:
+            self.lbl_report_status.configure(
+                text="URL Webmin kosong", text_color="#c62828"
+            )
+            return
+        try:
+            webbrowser.open(url)
+            self.lbl_report_status.configure(
+                text=f"Membuka Webmin: {url}", text_color="gray"
+            )
+        except Exception as e:
+            self.lbl_report_status.configure(
+                text=f"Gagal buka Webmin: {e}", text_color="#c62828"
+            )
+
+    def _show_report(self) -> None:
+        day = self.reports.normalize_day(self.report_date.get())
+        self.report_date.delete(0, "end")
+        self.report_date.insert(0, day)
+        text = self.reports.build_daily_report(day)
+        self.report_box.delete("1.0", "end")
+        self.report_box.insert("end", text)
+        self.lbl_report_status.configure(text=f"Laporan {day} ditampilkan.", text_color="gray")
+
+    def _send_report_email(self) -> None:
+        day = self.reports.normalize_day(self.report_date.get())
+        self.report_date.delete(0, "end")
+        self.report_date.insert(0, day)
+        self.lbl_report_status.configure(text=f"Mengirim laporan {day}…", text_color="gray")
+        # Refresh textbox first
+        self.report_box.delete("1.0", "end")
+        self.report_box.insert("end", self.reports.build_daily_report(day))
+
+        def work() -> None:
+            ok, msg = self.reports.send_daily_report(day, force=True)
+            color = "gray" if ok else "#c62828"
+            self.after(0, lambda: self.lbl_report_status.configure(text=msg, text_color=color))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _maybe_auto_report(self) -> None:
+        if self._auto_report_started:
+            return
+        self._auto_report_started = True
+
+        def work() -> None:
+            result = self.reports.maybe_auto_send_today()
+            if result is None:
+                return
+            ok, msg = result
+            color = "gray" if ok else "#c62828"
+            self.after(
+                0,
+                lambda: self.lbl_report_status.configure(
+                    text=f"Email harian: {msg}", text_color=color
+                ),
+            )
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _refresh_target_menu(self) -> None:
         targets = self.repo.list_targets()
@@ -303,24 +476,7 @@ class DashboardView(ctk.CTkFrame):
             )
 
         self._refresh_target_menu()
-
-        target_rows: list[Sequence[str]] = []
-        for t in self.repo.list_targets_overview():
-            host = t.get("host") or ""
-            target_rows.append(
-                (
-                    t.get("label") or "",
-                    host,
-                    t.get("username") or "",
-                    t.get("base_path") or "",
-                    "Ya" if TailscaleService.is_tailscale_ip(host) else "Tidak",
-                    str(t.get("source_count") or 0),
-                    _ssh_label(t.get("last_ssh_ok")),
-                    t.get("last_ssh_at") or "-",
-                    _trunc(t.get("notes"), 36),
-                )
-            )
-        self._fill_table(self.tbl_targets, self._target_headers, target_rows)
+        self._fill_targets_table(self.repo.list_targets_overview())
 
         source_rows: list[Sequence[str]] = []
         for s in self.repo.list_sources_overview():
@@ -363,6 +519,49 @@ class DashboardView(ctk.CTkFrame):
                 f"{h.get('recorded_at')} [{h.get('status')}] {h.get('label') or ''} "
                 f"{h.get('run_type')}: {h.get('message')}\n",
             )
+
+        self._show_report()
+        self._maybe_auto_report()
+        self._maybe_scan_arrivals()
+
+    def _scan_arrivals_force(self) -> None:
+        self._run_arrival_scan(force=True)
+
+    def _maybe_scan_arrivals(self) -> None:
+        if not self.arrival.should_scan_on_refresh():
+            return
+        self._run_arrival_scan(force=False)
+
+    def _run_arrival_scan(self, force: bool) -> None:
+        if self._arrival_scanning:
+            return
+        self._arrival_scanning = True
+        self.lbl_arrival_status.configure(
+            text="Scan backup masuk… (SSH ke server backup)", text_color="gray"
+        )
+
+        def work() -> None:
+            result = self.arrival.scan_all(force=force)
+
+            def done() -> None:
+                self._arrival_scanning = False
+                color = "gray" if result.ok else "#c62828"
+                self.lbl_arrival_status.configure(text=result.message, text_color=color)
+                if result.new_files > 0:
+                    self._show_report()
+                    # refresh history box lightly
+                    snap = self.monitor.dashboard_snapshot()
+                    self.hist_box.delete("1.0", "end")
+                    for h in snap["history"]:
+                        self.hist_box.insert(
+                            "end",
+                            f"{h.get('recorded_at')} [{h.get('status')}] {h.get('label') or ''} "
+                            f"{h.get('run_type')}: {h.get('message')}\n",
+                        )
+
+            self.after(0, done)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _check_all_ssh(self) -> None:
         def work() -> None:

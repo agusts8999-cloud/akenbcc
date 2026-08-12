@@ -68,6 +68,10 @@ class Repository:
             conn.execute("ALTER TABLE backup_targets ADD COLUMN last_ssh_ok INTEGER")
         if "last_ssh_at" not in cols:
             conn.execute("ALTER TABLE backup_targets ADD COLUMN last_ssh_at TEXT")
+        if "webmin_url" not in cols:
+            conn.execute(
+                "ALTER TABLE backup_targets ADD COLUMN webmin_url TEXT DEFAULT ''"
+            )
 
     @contextmanager
     def connect(self) -> Generator[sqlite3.Connection, None, None]:
@@ -121,15 +125,28 @@ class Repository:
         password: str = "",
         key_path: str = "",
         notes: str = "",
+        webmin_url: str = "",
     ) -> int:
         now = _now()
         pwd = self.secrets.encrypt(password) if password else ""
         with self.connect() as conn:
             cur = conn.execute(
                 """INSERT INTO backup_targets
-                (label,host,port,username,password_enc,key_path,base_path,notes,created_at,updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                (label, host, port, username, pwd, key_path, base_path, notes, now, now),
+                (label,host,port,username,password_enc,key_path,base_path,webmin_url,notes,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    label,
+                    host,
+                    port,
+                    username,
+                    pwd,
+                    key_path,
+                    base_path,
+                    webmin_url or "",
+                    notes,
+                    now,
+                    now,
+                ),
             )
             tid = int(cur.lastrowid)
         self._fire_notify(
@@ -181,7 +198,7 @@ class Repository:
             rows = conn.execute(
                 """
                 SELECT t.id, t.label, t.host, t.port, t.username, t.base_path,
-                       t.notes, t.last_ssh_ok, t.last_ssh_at,
+                       t.webmin_url, t.notes, t.last_ssh_ok, t.last_ssh_at,
                        (SELECT COUNT(*) FROM sources s
                         WHERE s.target_id = t.id AND s.deleted = 0) AS source_count
                 FROM backup_targets t
@@ -443,6 +460,34 @@ class Repository:
                 ORDER BY h.id DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
+            return [dict(r) for r in rows]
+
+    def history_for_date(
+        self, day: str, backup_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Activity rows for calendar day YYYY-MM-DD (matches recorded_at prefix)."""
+        day = (day or "").strip()[:10]
+        if len(day) != 10:
+            return []
+        prefix = f"{day}%"
+        with self.connect() as conn:
+            if backup_only:
+                rows = conn.execute(
+                    """SELECT h.*, s.label FROM run_history h
+                    LEFT JOIN sources s ON s.id=h.source_id
+                    WHERE h.recorded_at LIKE ?
+                      AND h.run_type LIKE 'backup%'
+                    ORDER BY h.id ASC""",
+                    (prefix,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT h.*, s.label FROM run_history h
+                    LEFT JOIN sources s ON s.id=h.source_id
+                    WHERE h.recorded_at LIKE ?
+                    ORDER BY h.id ASC""",
+                    (prefix,),
+                ).fetchall()
             return [dict(r) for r in rows]
 
     def set_deploy_revision(self, source_id: int, version: str, remote_hash: str) -> None:
