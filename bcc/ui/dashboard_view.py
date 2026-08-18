@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import threading
 import webbrowser
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 
@@ -72,6 +72,9 @@ class DashboardView(ctk.CTkFrame):
         self._disk_loading = False
         self._auto_report_started = False
         self._arrival_scanning = False
+        self._tailscale_loading = False
+        self._tailscale_checked_at = 0.0
+        self._tailscale_status = None
 
         self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.scroll.pack(fill="both", expand=True)
@@ -350,9 +353,9 @@ class DashboardView(ctk.CTkFrame):
         def work() -> None:
             ok, msg = self.reports.send_daily_report(day, force=True)
             color = "gray" if ok else "#c62828"
-            self.after(0, lambda: self.lbl_report_status.configure(text=msg, text_color=color))
+            self.app.post_ui(lambda: self.lbl_report_status.configure(text=msg, text_color=color))
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Kirim laporan email")
 
     def _maybe_auto_report(self) -> None:
         if self._auto_report_started:
@@ -365,14 +368,13 @@ class DashboardView(ctk.CTkFrame):
                 return
             ok, msg = result
             color = "gray" if ok else "#c62828"
-            self.after(
-                0,
+            self.app.post_ui(
                 lambda: self.lbl_report_status.configure(
                     text=f"Email harian: {msg}", text_color=color
                 ),
             )
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Laporan otomatis")
 
     def _refresh_target_menu(self) -> None:
         targets = self.repo.list_targets()
@@ -452,9 +454,9 @@ class DashboardView(ctk.CTkFrame):
 
         def work() -> None:
             data = self.monitor.target_disk_slices(tid)
-            self.after(0, lambda: self._apply_disk_result(data))
+            self.app.post_ui(lambda: self._apply_disk_result(data))
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Update grafik disk")
 
     def refresh(self) -> None:
         snap = self.monitor.dashboard_snapshot()
@@ -467,13 +469,7 @@ class DashboardView(ctk.CTkFrame):
                 f"/ ? {snap['sources_unknown']}"
             )
         )
-        ts = self.ts.status()
-        if not ts.installed:
-            self.lbl_ts.configure(text="Tailscale: CLI tidak ada")
-        else:
-            self.lbl_ts.configure(
-                text=f"Tailscale: {'ON' if ts.running else 'OFF'} {ts.ipv4 or ''}"
-            )
+        self._refresh_tailscale_async()
 
         self._refresh_target_menu()
         self._fill_targets_table(self.repo.list_targets_overview())
@@ -524,6 +520,35 @@ class DashboardView(ctk.CTkFrame):
         self._maybe_auto_report()
         self._maybe_scan_arrivals()
 
+    def _refresh_tailscale_async(self) -> None:
+        if self._tailscale_loading:
+            return
+        if self._tailscale_status is not None and time.monotonic() - self._tailscale_checked_at < 60:
+            self._show_tailscale_status(self._tailscale_status)
+            return
+        self._tailscale_loading = True
+        self.lbl_ts.configure(text="Tailscale: memeriksa…")
+
+        def work() -> None:
+            ts = self.ts.status()
+            self.app.post_ui(lambda: self._apply_tailscale_status(ts))
+
+        self.app.run_async(work, "Periksa Tailscale", job_key="tailscale-status")
+
+    def _apply_tailscale_status(self, ts) -> None:
+        self._tailscale_loading = False
+        self._tailscale_status = ts
+        self._tailscale_checked_at = time.monotonic()
+        self._show_tailscale_status(ts)
+
+    def _show_tailscale_status(self, ts) -> None:
+        if not ts.installed:
+            self.lbl_ts.configure(text="Tailscale: CLI tidak ada")
+        else:
+            self.lbl_ts.configure(
+                text=f"Tailscale: {'ON' if ts.running else 'OFF'} {ts.ipv4 or ''}"
+            )
+
     def _scan_arrivals_force(self) -> None:
         self._run_arrival_scan(force=True)
 
@@ -559,14 +584,14 @@ class DashboardView(ctk.CTkFrame):
                             f"{h.get('run_type')}: {h.get('message')}\n",
                         )
 
-            self.after(0, done)
+            self.app.post_ui(done)
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Scan backup masuk")
 
     def _check_all_ssh(self) -> None:
         def work() -> None:
             for s in self.repo.list_sources():
                 self.monitor.refresh_source_ssh(int(s["id"]))
-            self.after(0, self.refresh)
+            self.app.post_ui(self.refresh)
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Cek semua SSH")

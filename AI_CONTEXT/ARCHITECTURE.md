@@ -1,6 +1,6 @@
 # Architecture
 
-Last aligned with codebase: 2026-08-12 (build 0.1.0-10).
+Last aligned with codebase: 2026-08-17 (storage retention management added).
 
 ## Application architecture
 
@@ -16,10 +16,12 @@ flowchart TB
     MS[MonitorService]
     DS[DeployService]
     BS[BackupService]
+    SS[StorageService]
     UI --> Repo
     UI --> MS
     UI --> DS
     UI --> BS
+    UI --> SS
     UI --> RS
     Repo -->|async_hooks| NS
     RS --> NS
@@ -77,7 +79,13 @@ No public REST API. CLI entry: `python -m bcc`. Helper scripts at repo root for 
 
 ## Queue / cache
 
-- `threading.Thread(..., daemon=True)` for SMTP, SSH bulk checks, disk chart, email report.
+- `MainWindow.run_async()` serializes long operations in an in-process FIFO queue;
+  duplicate job keys are ignored while active/queued.
+- Workers return UI callbacks through a thread-safe `SimpleQueue` polled by the Tk
+  main thread. Worker threads never invoke Tk APIs directly.
+- A modal busy overlay disables navigation while the active operation runs and
+  shows its label, elapsed time, and queued-operation count.
+- Tailscale status runs through the queue and is cached for 60 seconds.
 - No Redis/Celery.
 
 ## Storage
@@ -88,6 +96,8 @@ No public REST API. CLI entry: `python -m bcc`. Helper scripts at repo root for 
 | App logs | `AppData/.../bcc.log` |
 | Remote backups | `target.base_path / source_label / ...` on backup host |
 | Templates | `bcc/templates/` (bundled in EXE) |
+
+Storage lifecycle uses three local SQLite tables: `backup_storages` registers a remote mount/path, `retention_jobs` stores retention and scan schedule policy, and `retention_items` stores discovered candidates and their action status. `StorageService` executes quoted SSH `find`, `mv`, and `rm` commands. Scanning is non-destructive; archive/delete require explicit UI selection.
 
 ## External services
 
@@ -126,3 +136,4 @@ Remote scripts: `backup-webs.sh`, `backup-dbs.sh`, `backup-all.sh` (+ templates)
 - SQLite + AppData keeps inventory portable per machine without cloud identity.
 - Async notify hooks never fail primary CRUD/backup paths.
 - Scripts remain portable shell for aaPanel cron independence if GUI is offline.
+- Retention scheduling is local to the running GUI. It is policy automation, not an autonomous AI decision-maker.

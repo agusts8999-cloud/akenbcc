@@ -23,7 +23,9 @@ Prefer **existing** patterns in this repo over new styles.
 ## UI
 
 - CustomTkinter only
-- Long network: `threading.Thread` + `self.after(0, …)` to update UI
+- Long network: queue through `MainWindow.run_async()` and return UI work through
+  `MainWindow.post_ui()`; worker threads must never call Tk/CustomTkinter APIs,
+  including widget `.after()` or `.get()`.
 - Tables: CTk grids/labels where used on dashboard
 - **Forbidden:** instance attribute named `_root` on widgets (Tk conflict)
 - Primary language for labels: Indonesian (existing screens)

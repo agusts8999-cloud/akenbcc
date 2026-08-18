@@ -1,5 +1,18 @@
 # Architecture Decision Records
 
+## ADR-012
+
+**Date:** 2026-08-18
+**Decision:** Serialize long desktop operations and marshal all worker UI updates through a main-thread queue.
+**Context:** Concurrent SSH/render work and worker-thread Tk calls caused intermittent Windows “Not Responding” behavior and `RuntimeError: main thread is not in main loop`.
+**Chosen solution:** `MainWindow.run_async()` owns a FIFO queue with duplicate job keys. A modal overlay disables navigation while work is active, and `post_ui()` feeds a `SimpleQueue` polled by Tk. Large file lists are paginated.
+**Alternatives:** Keep concurrent daemon threads with a visual spinner only; allow every view to call `.after()` from workers.
+**Reason:** Tk must remain single-threaded, and bounded rendering plus serialized remote work prevents UI starvation and connection storms.
+**Impact:** Long actions wait behind the active action; the UI shows queue length. Scheduled scans skip duplicate queue entries.
+**Status:** Accepted
+
+---
+
 ## ADR-001
 
 **Date:** 2026 (early project)  
@@ -10,6 +23,19 @@
 **Reason:** Fast local shipping, SSH from operator machine, AppData inventory.  
 **Impact:** No multi-user concurrent server; AppData machine-bound.  
 **Status:** Accepted  
+
+---
+
+## ADR-011
+
+**Date:** 2026-08-17
+**Decision:** Add retention management as a non-destructive scan-first workflow.
+**Context:** Operators need to find backup files older than a configurable period (default 3 days), group them, archive them to another registered storage, or delete them.
+**Chosen solution:** `StorageService` scans remote paths over SSH and stores candidates in SQLite. The Storage UI requires explicit item selection for archive/delete; the in-app scheduler performs scans only.
+**Alternatives:** Automatic deletion during scan; an always-on remote worker; AI-controlled destructive actions.
+**Reason:** Prevent accidental loss and respect BCC's desktop/support role.
+**Impact:** Automatic work only occurs while BCC is open; archive currently requires source and destination storage on the same SSH target.
+**Status:** Accepted
 
 ---
 

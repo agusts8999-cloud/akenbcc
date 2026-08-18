@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
@@ -21,6 +20,7 @@ class SettingsView(ctk.CTkFrame):
     def __init__(self, master, repo: Repository, app) -> None:
         super().__init__(master, fg_color="transparent")
         self.repo = repo
+        self.app = app
         self.notify = NotifyService(repo)
         self.notify.ensure_defaults()
 
@@ -216,9 +216,9 @@ class SettingsView(ctk.CTkFrame):
 
         def work() -> None:
             ok, text = self.notify.test_email()
-            self.after(0, lambda: self.msg.configure(text=text))
+            self.app.post_ui(lambda: self.msg.configure(text=text))
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Tes email")
 
     def _test_wa(self) -> None:
         self._save_wa()
@@ -226,6 +226,6 @@ class SettingsView(ctk.CTkFrame):
 
         def work() -> None:
             ok, text = self.notify.test_wa()
-            self.after(0, lambda: self.msg.configure(text=text))
+            self.app.post_ui(lambda: self.msg.configure(text=text))
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Tes WhatsApp")

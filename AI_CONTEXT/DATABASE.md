@@ -152,3 +152,12 @@ None — single operator machine DB.
 
 - Fernet key: `app_data_dir() / ".vault_key"`
 - Encryption API: `bcc/services/secrets.py` `SecretBox`
+
+## Storage lifecycle tables
+
+- `backup_storages`: registered remote storage/mount paths linked to `backup_targets`; soft-deleted with `deleted=1`.
+- `retention_jobs`: one policy per storage, default retention `3` days, action mode, archive storage, and scan interval.
+- `retention_items`: discovered old files, grouped by `group_key`, with `pending`, `archived`, `deleted`, or `error` status.
+
+Scans upsert pending candidates by `(storage_id, path)`. Existing acted items are not reverted to pending by a later scan. Existing AppData databases receive these tables through idempotent initialization.
+The archive group fallback is `arsip`; initialization migrates the older ambiguous `default` value to `arsip`.

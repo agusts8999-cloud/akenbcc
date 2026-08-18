@@ -39,6 +39,7 @@ IT operations / infrastructure backup for multi-VPS environments (Akenpro / aken
 - Daily report email to configured recipient (default `akenprodev@gmail.com`)
 - Webmin open URL per target (button)
 - One-file Windows EXE build
+- Storage management: register remote mount/path, scan retention candidates, group candidates, archive or permanently delete selected files
 
 ## Technology Stack
 
@@ -105,3 +106,5 @@ Live host IPs are inventory data (user AppData), not guaranteed in git.
 - Cron on VPS **without** BCC API hooks does not auto-email.
 - Preserve CustomTkinter-only UI.
 - Soft-delete inventory; prefer migrations over destructive schema resets.
+- Retention scans are non-destructive; archive/delete require explicit selected items and confirmation.
+- The local scheduler runs while BCC is open; it scans due policies but never performs automatic destructive actions.

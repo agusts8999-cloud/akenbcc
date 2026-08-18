@@ -133,6 +133,8 @@
 **Views:** dashboard, targets, sources, schedules, files, monitor, settings  
 **Do Not Change:** CustomTkinter-only policy without ADR
 
+**Process feedback:** `MainWindow.run_async()` serializes long work, deduplicates active/queued job keys, and shows a modal spinner with operation label, elapsed time, and queue length. `post_ui()` is the only worker-to-Tk path; navigation and F5 are disabled until the queue is empty.
+
 ---
 
 ## Module: Dashboard
@@ -175,3 +177,13 @@
 **Location:** `bcc/templates/linux/`  
 **Files:** backup-*.sh, lib.sh, setup-ssh.sh, config.sh (placeholders)  
 **Windows templates:** README only under `templates/windows/` (incomplete/planned path)
+
+---
+
+## Module: Storage management
+
+**Status:** DEVELOPMENT / OPERATIONAL REVIEW
+**Location:** `bcc/services/storage_service.py`, `bcc/ui/storage_view.py`
+**Responsibilities:** Register remote mount/path, test storage, scan files using an explicit age filter (initially `> 3 hari`), persist/filter candidates, display pending/all statuses with 50-row pagination, select page items, and explicitly move/delete selected items or all filtered pending files.
+**Database:** `backup_storages`, `retention_jobs`, `retention_items`
+**Safety:** Scan is read-only. Scheduler only scans; move/delete require confirmation. “All” actions affect only visible pending candidates for the selected storage. Existing destination filenames are not overwritten. Cross-server archive is rejected until a transfer implementation exists.

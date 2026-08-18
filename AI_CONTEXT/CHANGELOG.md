@@ -2,6 +2,91 @@
 
 Significant project changes for AI/human handoff. Package builds may exist without git tag.
 
+## 2026-08-18
+
+### Added
+
+- Storage result controls for **Tampilkan semua**, **Pilih semua**, **Kosongkan pilihan**, **Pindahkan semua**, and **Hapus semua**.
+- All-status retention view covering `pending`, `archived`, `deleted`, and `error` records.
+
+### Changed
+
+- Bulk actions are limited to visible pending candidates on the selected storage.
+- Move operations refuse to overwrite an existing destination filename.
+- Replaced the free-form retention field with explicit age-filter choices; initial selection is `> 3 hari` and applies to both scan and displayed results.
+- Renamed visible “default” concepts to clearer review/action and archive-folder labels; migrated legacy `group_key=default` metadata to `arsip`.
+
+### Security
+
+- Bulk move/delete requires an explicit confirmation containing the affected candidate count.
+
+### Package
+
+- Bumped package version to `0.1.1`, build `14`.
+- Built `dist/BackupControlCenter-0.1.1-14.exe` with Python 3.12/PyInstaller.
+- Desktop shortcut creation and 8-second GUI process smoke test succeeded.
+
+### UI
+
+- Added a global indeterminate process spinner in the MainWindow sidebar/header.
+- Routed long-running SSH, browse, deploy, backup, report, scan, and schedule operations through `MainWindow.run_async()`.
+- Spinner uses a concurrent-operation counter so it remains visible until all overlapping operations finish.
+- Bumped package version to `0.1.2`, build `15`.
+- Built `dist/BackupControlCenter-0.1.2-15.exe`; shortcut creation and GUI smoke test succeeded.
+- Bumped package version to `0.1.3`, build `16`.
+- Built `dist/BackupControlCenter-0.1.3-16.exe` with Python 3.13/PyInstaller and refreshed the desktop shortcut.
+- Verified embedded file/product version `0.1.3-16`; isolated-AppData EXE smoke test passed for 10 seconds.
+- Replaced direct worker-thread Tk calls with a thread-safe main-thread callback queue.
+- Long operations now run serially with duplicate job-key suppression.
+- Added a modal process overlay that blocks navigation/F5 and shows elapsed time plus queued work.
+- F5 refreshes only the active view; startup no longer refreshes every hidden tab.
+- Added 50-row retention pagination and 100-row file-browser pagination.
+- Tailscale CLI status now runs asynchronously and is cached for 60 seconds.
+- Scheduled retention checks only open the loader when at least one policy is due.
+
+### Verification
+
+- Python 3.12 `compileall` passed.
+- Static audit confirmed no view calls widget `.after()` from workers.
+- Isolated-AppData GUI startup smoke ran for 10 seconds without thread/Tk exceptions.
+
+## 2026-08-17
+
+### Added
+
+- Storage management tab and `StorageService`
+- Remote storage/mount registration and mount test
+- Retention scan with default 3-day threshold and persisted candidates
+- Candidate grouping plus explicit archive/delete actions
+- Scan-only local scheduler for enabled retention jobs while BCC is running
+
+### Database
+
+- Added `backup_storages`, `retention_jobs`, and `retention_items` with idempotent initialization
+
+### Security
+
+- Archive/delete are never performed automatically; delete requires confirmation and selected candidates
+
+### Package
+
+- Built `dist/BackupControlCenter-0.1.0-13.exe` with PyInstaller and Python 3.12.
+- Verified Tcl/Tk packaging and completed an 8-second GUI process smoke test.
+- Desktop shortcut creation succeeded.
+
+## 2026-08-17
+
+### Added
+
+- `AI_CONTEXT/INDEX.md` as the central context router
+- Vendor-neutral onboarding, workflow, and handoff protocol under `AI_CONTEXT/agents/`
+- Scalable README entry points for module, architecture, and database context
+
+### Changed
+
+- `AGENTS.md` now explicitly routes agents through `AI_CONTEXT/INDEX.md`
+- `CURRENT_STATE.md`, `TASKS.md`, and `HANDOFF.md` record the context-system update
+
 ## 2026-08-12
 
 ### Added

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 import tkinter.messagebox as mb
 from typing import TYPE_CHECKING, Any
 
@@ -175,17 +174,16 @@ class SchedulesView(ctk.CTkFrame):
             src = self.repo.get_source(source_id) or {}
             host = src.get("host") or str(source_id)
             msg = ("OK: " if r.ok else "GAGAL: ") + r.message
-            self.after(0, lambda: self._append_log(msg))
+            self.app.post_ui(lambda: self._append_log(msg))
             if r.stdout:
-                self.after(0, lambda: self._append_log(r.stdout[-500:]))
-            self.after(
-                0,
+                self.app.post_ui(lambda: self._append_log(r.stdout[-500:]))
+            self.app.post_ui(
                 lambda: mb.showinfo("Push aaPanel", f"Cron OK: {host}\n{r.message}")
                 if r.ok
                 else mb.showerror("Push aaPanel", f"Gagal: {host}\n{r.message}"),
             )
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Push jadwal aaPanel")
 
     def _push_all(self) -> None:
         self._append_log("=== Push semua ke aaPanel ===")
@@ -198,20 +196,19 @@ class SchedulesView(ctk.CTkFrame):
                 sid = int(s["id"])
                 r = self.deploy.push_aapanel_schedule(sid)
                 line = f"{'OK' if r.ok else 'FAIL'} {s['host']}: {r.message}"
-                self.after(0, lambda m=line: self._append_log(m))
+                self.app.post_ui(lambda m=line: self._append_log(m))
                 if r.ok:
                     ok_n += 1
                 else:
                     fail_n += 1
-            self.after(
-                0,
+            self.app.post_ui(
                 lambda: mb.showinfo(
                     "Push semua",
                     f"Selesai. Sukses={ok_n}, Gagal={fail_n}. Lihat Log push.",
                 ),
             )
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Push semua jadwal")
 
     def _auto_stagger(self) -> None:
         sources = [s for s in self.repo.list_sources() if s.get("role") == "linux_vps"]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 from typing import TYPE_CHECKING, Optional
 
 import customtkinter as ctk
@@ -17,6 +16,7 @@ class MonitorView(ctk.CTkFrame):
     def __init__(self, master, repo: Repository, app) -> None:
         super().__init__(master, fg_color="transparent")
         self.repo = repo
+        self.app = app
         self.monitor = MonitorService(repo)
 
         ctk.CTkLabel(
@@ -61,9 +61,9 @@ class MonitorView(ctk.CTkFrame):
         def work() -> None:
             r = self.monitor.check_target_disk(tid)
             text = r.stdout or r.message
-            self.after(0, lambda: self.out.insert("end", text + "\n\n"))
+            self.app.post_ui(lambda: self.out.insert("end", text + "\n\n"))
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Cek disk target")
 
     def _logs(self) -> None:
         sid = self._smap.get(self.source_menu.get())
@@ -74,6 +74,6 @@ class MonitorView(ctk.CTkFrame):
         def work() -> None:
             r = self.monitor.check_source_logs(sid)
             text = r.stdout or r.message
-            self.after(0, lambda: self.out.insert("end", text + "\n\n"))
+            self.app.post_ui(lambda: self.out.insert("end", text + "\n\n"))
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Ambil log sumber")

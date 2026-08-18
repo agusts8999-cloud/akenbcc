@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 import tkinter.messagebox as mb
 from typing import TYPE_CHECKING, Optional
 
@@ -19,6 +18,7 @@ class TargetsView(ctk.CTkFrame):
     def __init__(self, master, repo: Repository, app) -> None:
         super().__init__(master, fg_color="transparent")
         self.repo = repo
+        self.app = app
         self.ssh = SSHService()
         self.selected_id: Optional[int] = None
 
@@ -184,14 +184,13 @@ class TargetsView(ctk.CTkFrame):
                 self.repo.update_target(
                     tid, last_ssh_ok=1 if r.ok else 0, last_ssh_at=now
                 )
-            self.after(0, lambda: self.status.configure(text=r.message))
-            self.after(
-                0,
+            self.app.post_ui(lambda: self.status.configure(text=r.message))
+            self.app.post_ui(
                 lambda: mb.showinfo("Test SSH", r.message)
                 if r.ok
                 else mb.showerror("Test SSH", r.message),
             )
-            self.after(0, self.refresh)
+            self.app.post_ui(self.refresh)
 
         self.status.configure(text="Testing...")
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Test SSH target")

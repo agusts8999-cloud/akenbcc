@@ -36,10 +36,25 @@ def main() -> None:
 
     from bcc.db.repository import Repository
     from bcc.ui.main_window import MainWindow
+    from bcc.services.storage_service import StorageService
 
     repo = Repository()
     repo.initialize()
     app = MainWindow(repo)
+
+    # Policy scheduler: scan-only by default.  Archive/delete always needs
+    # explicit item selection from the Storage tab.
+    storage_service = StorageService(repo)
+    def run_storage_jobs() -> None:
+        # Avoid showing a loader every minute when no policy is due.
+        if repo.list_due_retention_jobs():
+            app.run_async(
+                storage_service.run_due_jobs,
+                "Jadwal scan storage",
+                job_key="scheduled-storage-scan",
+            )
+        app.after(60_000, run_storage_jobs)
+    app.after(60_000, run_storage_jobs)
     app.mainloop()
 
 

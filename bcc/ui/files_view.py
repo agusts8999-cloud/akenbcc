@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 from typing import TYPE_CHECKING, Any, Optional
 
 import customtkinter as ctk
@@ -31,6 +30,8 @@ class FilesView(ctk.CTkFrame):
         self._selected_name: Optional[str] = None
         self._loading = False
         self._row_widgets: list[ctk.CTkButton] = []
+        self._page = 0
+        self._page_size = 100
 
         ctk.CTkLabel(
             self, text="File backup", font=ctk.CTkFont(size=22, weight="bold")
@@ -94,6 +95,14 @@ class FilesView(ctk.CTkFrame):
 
         self.listbox = ctk.CTkScrollableFrame(self)
         self.listbox.pack(fill="both", expand=True, pady=4)
+        pager = ctk.CTkFrame(self, fg_color="transparent")
+        pager.pack(fill="x", pady=(0, 4))
+        self.prev_button = ctk.CTkButton(pager, text="← Sebelumnya", width=110, command=self._prev_page)
+        self.prev_button.pack(side="left")
+        self.page_label = ctk.CTkLabel(pager, text="Halaman 0/0", text_color="gray")
+        self.page_label.pack(side="left", padx=10)
+        self.next_button = ctk.CTkButton(pager, text="Berikutnya →", width=110, command=self._next_page)
+        self.next_button.pack(side="left")
 
     def refresh(self) -> None:
         sources = self.repo.list_sources()
@@ -142,14 +151,15 @@ class FilesView(ctk.CTkFrame):
         if self._loading:
             return
         path = self._current_path or None
+        mode = self._mode_key()
         self._loading = True
         self.lbl_status.configure(text="Loading…", text_color="gray")
 
         def work() -> None:
-            data = self.browse.list_dir(sid, self._mode_key(), path)
-            self.after(0, lambda: self._apply_list(data))
+            data = self.browse.list_dir(sid, mode, path)
+            self.app.post_ui(lambda: self._apply_list(data))
 
-        threading.Thread(target=work, daemon=True).start()
+        self.app.run_async(work, "Muat daftar file")
 
     def _apply_list(self, data: dict[str, Any]) -> None:
         self._loading = False
@@ -158,6 +168,7 @@ class FilesView(ctk.CTkFrame):
         self._row_widgets.clear()
         self._selected_name = None
         self._entries = data.get("entries") or []
+        self._page = 0
         self._current_path = data.get("path") or ""
         self._browse_root = data.get("root") or ""
 
@@ -171,14 +182,40 @@ class FilesView(ctk.CTkFrame):
                 text=data.get("message") or "Gagal",
                 text_color="#c62828",
             )
+            self.page_label.configure(text="Halaman 0/0 · 0 item")
+            self.prev_button.configure(state="disabled")
+            self.next_button.configure(state="disabled")
             return
 
-        self.lbl_status.configure(
-            text=data.get("message") or f"{len(self._entries)} item",
-            text_color="gray",
-        )
-        for i, e in enumerate(self._entries):
-            self._add_row(i, e)
+        self._render_page(data.get("message") or f"{len(self._entries)} item")
+
+    def _render_page(self, message: str = "") -> None:
+        for w in self.listbox.winfo_children():
+            w.destroy()
+        self._row_widgets.clear()
+        total = len(self._entries)
+        pages = max(1, (total + self._page_size - 1) // self._page_size)
+        self._page = min(max(0, self._page), pages - 1)
+        start = self._page * self._page_size
+        page_entries = self._entries[start : start + self._page_size]
+        self.page_label.configure(text=f"Halaman {self._page + 1}/{pages} · {total} item")
+        self.prev_button.configure(state="normal" if self._page > 0 else "disabled")
+        self.next_button.configure(state="normal" if self._page + 1 < pages else "disabled")
+        self.lbl_status.configure(text=message or f"{total} item", text_color="gray")
+        for i, entry in enumerate(page_entries):
+            self._add_row(start + i, entry)
+
+    def _prev_page(self) -> None:
+        if self._page > 0:
+            self._page -= 1
+            self._selected_name = None
+            self._render_page()
+
+    def _next_page(self) -> None:
+        if (self._page + 1) * self._page_size < len(self._entries):
+            self._page += 1
+            self._selected_name = None
+            self._render_page()
 
     def _add_row(self, index: int, e: dict[str, Any]) -> None:
         fname = e.get("name") or ""
@@ -211,8 +248,10 @@ class FilesView(ctk.CTkFrame):
             self._enter(fname)
         else:
             self.lbl_status.configure(text=f"File: {full}", text_color="gray")
+            start = self._page * self._page_size
             for j, w in enumerate(self._row_widgets):
-                sel = self._entries[j].get("name") == fname if j < len(self._entries) else False
+                entry_index = start + j
+                sel = self._entries[entry_index].get("name") == fname if entry_index < len(self._entries) else False
                 try:
                     w.configure(
                         fg_color=("gray75", "gray35") if sel else ("gray90", "gray22")

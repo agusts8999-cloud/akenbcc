@@ -47,6 +47,7 @@ Dependencies: `requirements.txt`.
 ```text
 AGENTS.md                 ← you are here (entry)
 AI_CONTEXT/               ← full project knowledge base
+  INDEX.md                ← context router (read after this file)
   PROJECT.md
   ARCHITECTURE.md
   DATABASE.md
@@ -58,6 +59,7 @@ AI_CONTEXT/               ← full project knowledge base
   TASKS.md
   CHANGELOG.md
   HANDOFF.md
+  agents/                 ← onboarding, workflow, and handoff protocol
 ```
 
 **Source of truth:** repository code + AI_CONTEXT. Do not rely on chat memory or prior agents.
@@ -67,11 +69,12 @@ AI_CONTEXT/               ← full project knowledge base
 ## 5. Reading protocol (mandatory)
 
 1. Read `AGENTS.md` (this file).
-2. Read at minimum:  
+2. Read `AI_CONTEXT/INDEX.md`.
+3. Read at minimum:
    `AI_CONTEXT/PROJECT.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`, `MODULES.md`, `CONVENTIONS.md`, `DECISIONS.md`, `TASKS.md`, `HANDOFF.md`.
-3. Inspect the real tree (`bcc/`, scripts, `.gitignore`).
-4. If docs ≠ code: **code wins**; then update AI_CONTEXT.
-5. Only then implement the smallest safe change.
+4. Inspect the real tree (`bcc/`, scripts, `.gitignore`).
+5. If docs ≠ code: **code wins**; then update AI_CONTEXT.
+6. Only then implement the smallest safe change.
 
 ---
 

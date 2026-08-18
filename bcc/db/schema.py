@@ -83,4 +83,51 @@ CREATE TABLE IF NOT EXISTS run_history (
     recorded_at TEXT NOT NULL,
     FOREIGN KEY (source_id) REFERENCES sources(id)
 );
+
+CREATE TABLE IF NOT EXISTS backup_storages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    mount_path TEXT NOT NULL,
+    storage_type TEXT NOT NULL DEFAULT 'mount',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (target_id) REFERENCES backup_targets(id)
+);
+
+CREATE TABLE IF NOT EXISTS retention_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    storage_id INTEGER NOT NULL,
+    retention_days INTEGER NOT NULL DEFAULT 3,
+    action TEXT NOT NULL DEFAULT 'review' CHECK(action IN ('review', 'archive', 'delete')),
+    archive_storage_id INTEGER,
+    schedule_enabled INTEGER NOT NULL DEFAULT 0,
+    interval_hours INTEGER NOT NULL DEFAULT 24,
+    last_run_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (storage_id) REFERENCES backup_storages(id),
+    FOREIGN KEY (archive_storage_id) REFERENCES backup_storages(id)
+);
+
+CREATE TABLE IF NOT EXISTS retention_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    storage_id INTEGER NOT NULL,
+    path TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    modified_at TEXT,
+    age_days REAL NOT NULL DEFAULT 0,
+    group_key TEXT NOT NULL DEFAULT 'arsip',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'archived', 'deleted', 'error')),
+    archive_storage_id INTEGER,
+    scanned_at TEXT NOT NULL,
+    acted_at TEXT,
+    error_message TEXT DEFAULT '',
+    UNIQUE(storage_id, path),
+    FOREIGN KEY (storage_id) REFERENCES backup_storages(id),
+    FOREIGN KEY (archive_storage_id) REFERENCES backup_storages(id)
+);
 """
