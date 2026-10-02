@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from bcc.db.repository import Repository
 from bcc.services.monitor_service import human_bytes
-from bcc.services.ssh_service import SSHService
+from bcc.services.ssh_service import SSHService, target_route
 
 log = logging.getLogger(__name__)
 
@@ -268,6 +268,7 @@ class BackupArrivalService:
             password=self.repo.target_password(target),
             key_path=target.get("key_path") or "",
             timeout=120,
+            **target_route(target),
         )
         if not r.ok and not (r.stdout or "").strip():
             raise RuntimeError(r.message or "SSH gagal")

@@ -66,6 +66,7 @@ class SourcesView(ctk.CTkFrame):
         fields = [
             ("label", "Label"),
             ("host", "Host"),
+            ("alt_host", "Host cadangan (Tailscale)"),
             ("port", "Port"),
             ("username", "User SSH"),
             ("password", "Password SSH"),
@@ -118,11 +119,12 @@ class SourcesView(ctk.CTkFrame):
         for w in self.listbox.winfo_children():
             w.destroy()
         for s in self.repo.list_sources():
-            ts = "TS" if TailscaleService.is_tailscale_ip(s["host"]) else "noTS"
+            via = s.get("last_ssh_host") or s["host"]
+            ts = "TS" if TailscaleService.is_tailscale_ip(via) or TailscaleService.is_tailscale_ip(s.get("alt_host") or "") else "noTS"
             ssh = {1: "OK", 0: "FAIL"}.get(s.get("last_ssh_ok"), "?")
             b = ctk.CTkButton(
                 self.listbox,
-                text=f"[{s['role']}] {s['label']} | SSH {ssh} | {ts}",
+                text=f"[{s['role']}] {s['label']} | SSH {ssh} | {ts} | {via}",
                 anchor="w",
                 command=lambda i=s["id"]: self._select(i),
             )
@@ -164,6 +166,7 @@ class SourcesView(ctk.CTkFrame):
         vals = {
             "label": s["label"],
             "host": s["host"],
+            "alt_host": s.get("alt_host") or "",
             "port": str(s["port"]),
             "username": s["username"],
             "password": "",
@@ -190,6 +193,7 @@ class SourcesView(ctk.CTkFrame):
                 label=d["label"],
                 role=self.role.get(),
                 host=d["host"],
+                alt_host=d.get("alt_host") or "",
                 port=port,
                 username=d["username"],
                 target_id=tid,
@@ -222,6 +226,8 @@ class SourcesView(ctk.CTkFrame):
                 aapanel=bool(self.aapanel.get()),
                 notes=d["notes"],
             )
+            if d.get("alt_host"):
+                self.repo.update_source(self.selected_id, alt_host=d["alt_host"])
         self._log("Disimpan.")
         self.refresh()
 

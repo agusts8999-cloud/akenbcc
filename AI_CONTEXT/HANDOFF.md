@@ -2,15 +2,15 @@
 
 ## Last Agent
 
-Codex
+Cursor
 
 ## Date
 
-2026-08-18
+2026-10-02
 
 ## Task
 
-Diagnose and fix intermittent Windows “Not Responding” behavior; add a blocking process loader.
+Split OMV access: LAN for BCC, Tailscale plus keepalive for VPS, package build 19.
 
 ## Completed
 
@@ -63,7 +63,11 @@ Storage policy defaults to 3 days, review mode, and 24-hour interval. Scheduler 
 
 Python 3.12 `compileall` passed. Static audit found no remaining view-level `self.after()` calls. An isolated-AppData GUI startup smoke ran for 10 seconds without worker/Tk exceptions. Temporary SQLite smoke tests previously verified pending/all-status queries and migration from `group_key=default` to `arsip`; fake SSH previously verified two-item bulk move and no-overwrite commands. Live SSH actions were not run because no safe remote test storage was provided.
 
-Latest PyInstaller package is `dist/BackupControlCenter-0.1.3-16.exe`, built with Python 3.13. Embedded file/product version is `0.1.3-16`; the desktop shortcut was refreshed and a 10-second isolated-AppData EXE smoke test passed.
+Python 3.13.15 is installed at `%LOCALAPPDATA%\Programs\Python\Python313`. Requirements and PyInstaller were installed there.
+
+Latest package is `dist/BackupControlCenter-0.1.3-17.exe` (about 25 MB), built with Python 3.13.15. Desktop shortcut was recreated after the shortcut script description was changed to ASCII. A 10-second isolated-AppData EXE smoke stayed running, then the process was stopped. Live inventory was not used for that smoke.
+
+AppData target id 1 was updated in place: label `OMV NAS`, host `100.107.205.80`, user `aken`, base path `/srv/dev-disk-by-uuid-B004D6B804D68130/NAS/backups`, panel URL `http://100.107.205.80`. Storage id 1 `OMV NAS backups` is review-only. SSH mkdir confirmed `webs`, `dbs`, and `logs` on the 954G NTFS disk. Password round-trip through SecretBox succeeded. Later the same day, four VPS rows were restored from the local seed and linked to this target.
 
 ## Known Issues
 
@@ -85,10 +89,16 @@ Latest PyInstaller package is `dist/BackupControlCenter-0.1.3-16.exe`, built wit
 
 ## Next Agent Should
 
-1. Validate Storage pagination against a safe test path and verify the modal overlay during a live SSH scan.
-2. Distribute and operator-test build `0.1.3-16` against a safe storage path.
-3. Do not enable destructive workflows without operator review.
-4. Implement cross-server archive only with resumable/checksummed transfer.
+1. Build 19 is the current package: `dist/BackupControlCenter-0.1.3-19.exe`. Desktop shortcut points at that EXE. BCC tries OMV LAN `192.168.0.110` first (3s), then Tailscale `100.107.205.80`.
+2. Keepalive redeploy of all four VPS succeeded on 2026-10-02. On `46.250.233.39`, `REMOTE_HOST` is still `100.107.205.80` and `SSH_OPTS` includes `ServerAliveInterval=15`. Do not point VPS `REMOTE_HOST` at the LAN address.
+3. Build 18 behavior remains: scripts append logs, manual full backup starts detached `backup-all.sh`, source `46.250.233.39` has `alt_host` `100.121.63.114`. Do not start a manual backup while cron holds `.lock-webs` or `.lock-dbs`.
+4. Do not store backups on `/` or `/home/aken` (28G OS disk). Do not use `/srv/nas` — that directory is on the OS disk.
+5. Panel URL on the target is `http://100.107.205.80`. The button label still says Webmin.
+6. Do not enable destructive retention workflows without operator review.
+
+## OMV destination (verified 2026-10-02)
+
+SSH as `aken` to Tailscale `100.107.205.80` succeeded. Host `raspberrypi-nas`, Debian 13, OpenMediaVault 8.5.9, `rsync` present, password and pubkey SSH enabled. Data disk `/dev/sda1` is NTFS (`fuseblk`), about 954G free, mounted at `/srv/dev-disk-by-uuid-B004D6B804D68130`. Folder `NAS` exists there and user `aken` can create files. Password stays out of this file.
 
 ## Warnings
 

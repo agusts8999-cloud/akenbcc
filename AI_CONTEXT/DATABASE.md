@@ -65,7 +65,7 @@ Important keys (non-exhaustive):
 | Column | Notes |
 |--------|--------|
 | id | PK |
-| label, host, port, username | SSH identity |
+| label, host, lan_host, port, username | SSH identity. `host` is the VPS upload address (Tailscale). `lan_host` is tried first by BCC on the operator PC. |
 | password_enc, key_path | Auth |
 | base_path | Backup root (default `/home/backupuser/backups`) |
 | webmin_url | Optional; empty → UI uses `https://{host}:10000` |
@@ -87,13 +87,13 @@ Important keys (non-exhaustive):
 | id | PK |
 | label | Human title (shown on pie chart) |
 | role | `linux_vps` \| `windows_pc` |
-| host, port, username, password_enc, key_path | SSH |
+| host, alt_host, port, username, password_enc, key_path | SSH. `alt_host` is the failover address (often Tailscale). |
 | target_id | FK → backup_targets |
 | deploy_path, web_root | Remote paths |
 | source_label | Folder name under target base_path |
 | mysql_user, mysql_password_enc | DB backup |
 | aapanel | 0/1 |
-| last_ssh_ok, last_ssh_at, last_deploy_at | Status |
+| last_ssh_ok, last_ssh_at, last_ssh_host, last_deploy_at | Status. `last_ssh_host` is the address that last connected. |
 | deleted | Soft delete |
 
 ---

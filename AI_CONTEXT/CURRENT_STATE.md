@@ -1,10 +1,10 @@
 # Current State
 
-**Last Updated:** 2026-08-18
+**Last Updated:** 2026-10-02
 
 ## Overall Status
 
-Functional Windows desktop BCC for inventory, deploy, schedules, backup trigger, files browse, disk pie, SMTP notifications, daily report UI, Webmin button, backup arrival scan, and Storage/Retention management. Source and packaged build **0.1.3-16** include the serialized background-work queue, modal busy overlay, and pagination responsiveness fixes.
+Functional Windows desktop BCC for inventory, deploy, schedules, backup trigger, files browse, disk pie, SMTP notifications, daily report UI, Webmin button, backup arrival scan, and Storage/Retention management. Source and packaged build **0.1.3-19** use OMV LAN `192.168.0.110` for BCC and Tailscale `100.107.205.80` for VPS uploads, with rsync SSH keepalive. Build 18 included detached full backup and source failover. Build 17 included the serialized background-work queue, modal busy overlay, and pagination responsiveness fixes. The live backup target is OMV on Tailscale `100.107.205.80`.
 
 Remote/real inventory lives in operator AppData (not in git).
 
@@ -49,7 +49,7 @@ Remote/real inventory lives in operator AppData (not in git).
 - Tk: never set widget attribute `_root` (historical files_view crash)
 - Git public: must not commit live credentials
 - Retention scheduler does not run when the GUI is closed and never auto-deletes/archives.
-- Build 16 / version 0.1.3 was packaged with Python 3.13 and passed a 10-second isolated-AppData EXE smoke test.
+- Build 17 / version 0.1.3 was packaged with Python 3.13.15 and passed a 10-second isolated-AppData EXE smoke test. Shortcut script description is ASCII so Windows PowerShell 5 can parse it.
 
 ## Technical Debt
 
@@ -72,13 +72,17 @@ Remote/real inventory lives in operator AppData (not in git).
 - SMTP password must be set by operator before emails work
 - Tailscale/network access required for live SSH checks / arrival scan
 
+## Backup destination (operator, 2026-10-02)
+
+Live storage target is OpenMediaVault on Tailscale `100.107.205.80` (user `aken`, host `raspberrypi-nas`, OMV 8.5.9). AppData target id 1 `OMV NAS` now uses `/srv/dev-disk-by-uuid-B004D6B804D68130/NAS/backups` on the NTFS data disk (~954G free). Storage id 1 is registered in review mode. Remote `webs`, `dbs`, and `logs` exist. Four aaPanel VPS sources from the local gitignored seed are registered on target id 1. On 2026-10-02 each was redeployed: setup-ssh to OMV succeeded and aaPanel cron jobs were recreated. No Windows PC records were found. The 28G root disk and `/home/aken` are not backup storage. Form/schema defaults still mention Webmin `/home/backupuser/backups`. Password stays in the AppData vault only.
+
 ## Next Recommended Actions
 
-1. Commit/push uncommitted work (arrival + prior features + AI_CONTEXT) if user wants
-2. Distribute `BackupControlCenter-0.1.3-16.exe` after operator validation
-3. Smoke-test Scan backup masuk against live backup host
-4. Optional fase 2: parse VPS backup logs for FAIL without files
-5. Validate Storage tab on a safe test directory, then consider cross-server archive.
+1. Add VPS/PC sources that point at target `OMV NAS`, deploy scripts, and run `setup-ssh.sh`.
+2. Commit/push uncommitted work if the user wants
+3. Distribute `BackupControlCenter-0.1.3-17.exe` after operator validation
+4. Smoke-test Scan backup masuk after the first source upload
+5. Optional fase 2: parse VPS backup logs for FAIL without files
 
 ## Documentation Drift
 

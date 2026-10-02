@@ -9,7 +9,7 @@ source "${SCRIPT_DIR}/lib.sh"
 
 LOG_FILE="${LOCAL_LOG_DIR}/backup-all_$(date '+%Y%m%d').log"
 mkdir -p "${LOCAL_LOG_DIR}"
-exec > >(tee -a "${LOG_FILE}") 2>&1
+exec >>"${LOG_FILE}" 2>&1
 
 log "INFO" "######## BACKUP ALL START ########"
 rc=0

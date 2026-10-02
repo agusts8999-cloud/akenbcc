@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 
 import customtkinter as ctk
 
-from bcc.services.ssh_service import SSHService
+from bcc.services.ssh_service import SSHService, lan_then_tailscale
 from bcc.services.tailscale_service import TailscaleService
 
 if TYPE_CHECKING:
@@ -46,7 +46,8 @@ class TargetsView(ctk.CTkFrame):
         self.entries: dict[str, ctk.CTkEntry] = {}
         fields = [
             ("label", "Label"),
-            ("host", "Host (Tailscale IP)"),
+            ("host", "Host Tailscale (tujuan VPS)"),
+            ("lan_host", "Host LAN (PC saja)"),
             ("port", "Port"),
             ("username", "User SSH"),
             ("password", "Password (opsional)"),
@@ -88,9 +89,10 @@ class TargetsView(ctk.CTkFrame):
             badge = ""
             if TailscaleService.is_tailscale_ip(t["host"]):
                 badge = " [TS]"
+            lan = f" / {t['lan_host']}" if (t.get("lan_host") or "").strip() else ""
             b = ctk.CTkButton(
                 self.listbox,
-                text=f"{t['label']} ({t['host']}){badge}",
+                text=f"{t['label']} ({t['host']}{lan}){badge}",
                 anchor="w",
                 command=lambda i=t["id"]: self._select(i),
             )
@@ -112,6 +114,7 @@ class TargetsView(ctk.CTkFrame):
         mapping = {
             "label": t["label"],
             "host": t["host"],
+            "lan_host": t.get("lan_host") or "",
             "port": str(t["port"]),
             "username": t["username"],
             "password": "",
@@ -133,6 +136,7 @@ class TargetsView(ctk.CTkFrame):
             kwargs = {
                 "label": data["label"],
                 "host": data["host"],
+                "lan_host": data.get("lan_host") or "",
                 "port": port,
                 "username": data["username"],
                 "base_path": data["base_path"],
@@ -147,6 +151,7 @@ class TargetsView(ctk.CTkFrame):
                 label=data["label"],
                 host=data["host"],
                 username=data["username"],
+                lan_host=data.get("lan_host") or "",
                 base_path=data["base_path"] or "/home/backupuser/backups",
                 port=port,
                 password=data["password"],
@@ -176,8 +181,14 @@ class TargetsView(ctk.CTkFrame):
         def work() -> None:
             from datetime import datetime, timezone
 
+            hosts, timeouts = lan_then_tailscale(data.get("lan_host") or "", data["host"])
             r = self.ssh.test(
-                data["host"], data["username"], int(data["port"] or 22), password=pw
+                data["host"],
+                data["username"],
+                int(data["port"] or 22),
+                password=pw,
+                hosts=hosts or None,
+                connect_timeouts=timeouts or None,
             )
             if tid:
                 now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

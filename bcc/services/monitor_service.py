@@ -6,7 +6,7 @@ import re
 from typing import Any, Optional
 
 from bcc.db.repository import Repository
-from bcc.services.ssh_service import SSHResult, SSHService
+from bcc.services.ssh_service import SSHResult, SSHService, ordered_hosts, target_route
 
 
 def human_bytes(n: int) -> str:
@@ -43,6 +43,7 @@ class MonitorService:
             password=self.repo.target_password(t),
             key_path=t.get("key_path") or "",
             timeout=60,
+            **target_route(t),
         )
 
     def target_disk_slices(self, target_id: int) -> dict[str, Any]:
@@ -73,6 +74,7 @@ class MonitorService:
             password=self.repo.target_password(t),
             key_path=t.get("key_path") or "",
             timeout=90,
+            **target_route(t),
         )
         if not r.ok and not (r.stdout or "").strip():
             return {
@@ -205,7 +207,7 @@ class MonitorService:
             f"echo '===DISK==='; df -h {deploy} 2>/dev/null | tail -1"
         )
         pw = self.repo.source_password(s)
-        return self.ssh.run(
+        result = self.ssh.run(
             host=s["host"],
             username=s["username"],
             command=cmd,
@@ -214,7 +216,11 @@ class MonitorService:
             key_path=s.get("key_path") or "",
             sudo_password=pw if s["username"] != "root" else "",
             timeout=60,
+            hosts=ordered_hosts(s.get("host") or "", s.get("alt_host") or "", s.get("last_ssh_host") or ""),
         )
+        if result.host_used:
+            self.repo.remember_ssh_host(source_id, result.host_used)
+        return result
 
     def refresh_source_ssh(self, source_id: int) -> SSHResult:
         s = self.repo.get_source(source_id)
@@ -226,7 +232,10 @@ class MonitorService:
             port=int(s.get("port") or 22),
             password=self.repo.source_password(s),
             key_path=s.get("key_path") or "",
+            hosts=ordered_hosts(s.get("host") or "", s.get("alt_host") or "", s.get("last_ssh_host") or ""),
         )
+        if r.host_used:
+            self.repo.remember_ssh_host(source_id, r.host_used)
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

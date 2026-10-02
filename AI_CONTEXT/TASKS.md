@@ -3,7 +3,13 @@
 ## NOW
 
 - [ ] Keep AI_CONTEXT in sync after each significant feature
-- [ ] Operator: register a storage mount and validate scan against a non-production/test directory
+- [x] Operator storage: OMV target id 1 and storage id 1 registered; remote `backups/{webs,dbs,logs}` created on the 954G disk
+- [x] Restore four known aaPanel VPS sources onto OMV target id 1 (SSH OK). No PC catalog found
+- [x] Deploy Linux on the four VPS sources so scripts, SSH keys, and aaPanel cron use OMV
+- [x] Detached full backup, log append fix, and source SSH failover (`alt_host` / `last_ssh_host`) in build 18
+- [x] OMV `lan_host` `192.168.0.110` for BCC; VPS upload stays Tailscale; rsync keepalive in build 19
+- [x] Redeploy keepalive to the four VPS (2026-10-02); `REMOTE_HOST` on `46.250.233.39` remains `100.107.205.80`
+- [ ] Validate arrival scan after the next scheduled or manual backup lands on OMV
 - [ ] Operator: review retention candidates before enabling archive/delete workflow
 - [ ] Operator: smoke-test **Scan backup masuk** on live backup host (baseline then new file)
 - [ ] Git commit + push when user requests

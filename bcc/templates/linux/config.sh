@@ -34,7 +34,7 @@ REMOTE_PORT="22"
 # SSH key (dibuat oleh setup-ssh.sh)
 SSH_KEY_DIR="{{SSH_KEY_DIR}}"
 SSH_KEY="{{SSH_KEY}}"
-SSH_OPTS="-i ${SSH_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -p ${REMOTE_PORT}"
+SSH_OPTS="-i ${SSH_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -p ${REMOTE_PORT}"
 
 # --- Staging lokal (sebelum upload) ---
 LOCAL_STAGING="{{LOCAL_STAGING}}"

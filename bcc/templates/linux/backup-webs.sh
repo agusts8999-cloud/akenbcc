@@ -16,7 +16,7 @@ if ! flock -n 9; then
 fi
 
 LOG_FILE="${LOCAL_LOG_DIR}/backup-webs_$(date '+%Y%m%d').log"
-exec > >(tee -a "${LOG_FILE}") 2>&1
+exec >>"${LOG_FILE}" 2>&1
 
 main() {
   ensure_dirs

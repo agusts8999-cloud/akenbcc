@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from bcc.services.ssh_service import SSHService
+from bcc.services.ssh_service import SSHService, target_route
 
 log = logging.getLogger(__name__)
 
@@ -31,8 +31,10 @@ class StorageService:
         target = self.repo.get_target(int(storage["target_id"]))
         if not target:
             raise ValueError("Target storage tidak ditemukan")
+        route = target_route(target)
         return {"host": target["host"], "username": target["username"], "port": target["port"],
-                "password": self.repo.target_password(target), "key_path": target.get("key_path") or ""}
+                "password": self.repo.target_password(target), "key_path": target.get("key_path") or "",
+                **route}
 
     def test_storage(self, storage_id: int) -> StorageResult:
         storage = self.repo.get_storage(storage_id)

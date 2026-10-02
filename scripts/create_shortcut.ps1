@@ -21,7 +21,7 @@ $sc = $wsh.CreateShortcut($lnkPath)
 $sc.TargetPath = (Resolve-Path -LiteralPath $ExePath).Path
 $sc.WorkingDirectory = Split-Path -Parent $sc.TargetPath
 $sc.IconLocation = ((Resolve-Path -LiteralPath $IconPath).Path) + ",0"
-$sc.Description = "Backup Control Center — support & monitoring"
+$sc.Description = "Backup Control Center - support and monitoring"
 $sc.Save()
 
 Write-Host "Shortcut: $lnkPath"

@@ -6,7 +6,7 @@ import re
 from typing import Any, Optional
 
 from bcc.db.repository import Repository
-from bcc.services.ssh_service import SSHService
+from bcc.services.ssh_service import SSHService, ordered_hosts, target_route
 
 
 def _shell_quote(path: str) -> str:
@@ -92,7 +92,8 @@ class BrowseService:
                 "root": _norm_abs(root),
                 "max_depth": None,
                 "source_label": label,
-                "endpoint_label": f"{target.get('label')} ({target['host']})",
+                "endpoint_label": f"{target.get('label')} ({target.get('lan_host') or target['host']})",
+                **target_route(target),
             }
 
         # mode source
@@ -121,6 +122,12 @@ class BrowseService:
             "sudo_password": self.repo.source_password(source)
             if source["username"] != "root"
             else "",
+            "hosts": ordered_hosts(
+                source.get("host") or "",
+                source.get("alt_host") or "",
+                source.get("last_ssh_host") or "",
+            ),
+            "source_id": int(source["id"]),
         }
 
     def clamp_path(self, root: str, path: str, max_depth: Optional[int] = None) -> str:
@@ -193,7 +200,11 @@ class BrowseService:
             key_path=ctx.get("key_path") or "",
             sudo_password=sudo,
             timeout=60,
+            hosts=ctx.get("hosts"),
+            connect_timeouts=ctx.get("connect_timeouts"),
         )
+        if r.host_used and ctx.get("source_id"):
+            self.repo.remember_ssh_host(int(ctx["source_id"]), r.host_used)
 
         out = r.stdout or ""
         if "NOT_DIR" in out or (not r.ok and "===LIST===" not in out):
@@ -241,7 +252,11 @@ class BrowseService:
             key_path=ctx.get("key_path") or "",
             sudo_password=ctx.get("sudo_password") or "",
             timeout=60,
+            hosts=ctx.get("hosts"),
+            connect_timeouts=ctx.get("connect_timeouts"),
         )
+        if r.host_used and ctx.get("source_id"):
+            self.repo.remember_ssh_host(int(ctx["source_id"]), r.host_used)
         if not r.ok and not r.stdout:
             return {
                 "ok": False,

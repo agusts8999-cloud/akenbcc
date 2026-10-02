@@ -72,6 +72,16 @@ class Repository:
             conn.execute(
                 "ALTER TABLE backup_targets ADD COLUMN webmin_url TEXT DEFAULT ''"
             )
+        if "lan_host" not in cols:
+            conn.execute("ALTER TABLE backup_targets ADD COLUMN lan_host TEXT DEFAULT ''")
+
+        source_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(sources)").fetchall()
+        }
+        if "alt_host" not in source_cols:
+            conn.execute("ALTER TABLE sources ADD COLUMN alt_host TEXT DEFAULT ''")
+        if "last_ssh_host" not in source_cols:
+            conn.execute("ALTER TABLE sources ADD COLUMN last_ssh_host TEXT DEFAULT ''")
 
         # Storage lifecycle tables are created by SCHEMA_SQL for new DBs.  The
         # idempotent CREATE statements also cover existing AppData databases.
@@ -281,17 +291,19 @@ class Repository:
         key_path: str = "",
         notes: str = "",
         webmin_url: str = "",
+        lan_host: str = "",
     ) -> int:
         now = _now()
         pwd = self.secrets.encrypt(password) if password else ""
         with self.connect() as conn:
             cur = conn.execute(
                 """INSERT INTO backup_targets
-                (label,host,port,username,password_enc,key_path,base_path,webmin_url,notes,created_at,updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (label,host,lan_host,port,username,password_enc,key_path,base_path,webmin_url,notes,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     label,
                     host,
+                    lan_host or "",
                     port,
                     username,
                     pwd,
@@ -469,6 +481,18 @@ class Repository:
             source_id=sid,
         )
         return sid
+
+    def remember_ssh_host(self, source_id: int, host: str) -> None:
+        """Record the source address that connected. No notification."""
+        host = (host or "").strip()
+        if not host:
+            return
+        with self.connect() as conn:
+            conn.execute(
+                """UPDATE sources SET last_ssh_host=?, updated_at=?
+                   WHERE id=? AND IFNULL(last_ssh_host, '')!=?""",
+                (host, _now(), source_id, host),
+            )
 
     def update_source(self, source_id: int, **fields: Any) -> None:
         if not fields:

@@ -10,11 +10,11 @@ from typing import Any, Optional
 
 from bcc.db.repository import Repository
 from bcc.paths import templates_dir
-from bcc.services.ssh_service import SSHResult, SSHService
+from bcc.services.ssh_service import SSHResult, SSHService, ordered_hosts
 
 log = logging.getLogger(__name__)
 
-TEMPLATE_VERSION = "0.1.0"
+TEMPLATE_VERSION = "0.1.2"
 
 LINUX_FILES = [
     "config.sh",
@@ -102,6 +102,18 @@ class DeployService:
     def __init__(self, repo: Repository, ssh: Optional[SSHService] = None) -> None:
         self.repo = repo
         self.ssh = ssh or SSHService()
+
+    def _source_hosts(self, source: dict[str, Any]) -> list[str]:
+        return ordered_hosts(
+            source.get("host") or "",
+            source.get("alt_host") or "",
+            source.get("last_ssh_host") or "",
+        )
+
+    def _note_host(self, source: dict[str, Any], result: SSHResult) -> None:
+        if result.host_used:
+            self.repo.remember_ssh_host(int(source["id"]), result.host_used)
+            source["last_ssh_host"] = result.host_used
 
     def render_linux_config(
         self,
@@ -195,7 +207,9 @@ class DeployService:
             password=src_pw,
             key_path=source.get("key_path") or "",
             sudo_password=src_pw if source["username"] != "root" else "",
+            hosts=self._source_hosts(source),
         )
+        self._note_host(source, res)
         if not res.ok:
             self.repo.add_run_history(source_id, "deploy", "fail", res.message)
             return res
@@ -209,7 +223,9 @@ class DeployService:
             password=src_pw,
             sudo_password=src_pw if source["username"] != "root" else "",
             timeout=180,
+            hosts=self._source_hosts(source),
         )
+        self._note_host(source, setup)
         if not setup.ok:
             self.repo.add_run_history(
                 source_id, "setup_ssh", "fail", setup.message + "\n" + setup.stdout[-500:]
@@ -223,7 +239,8 @@ class DeployService:
         self.repo.update_source(source_id, last_deploy_at=__import__("datetime").datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
         msg = f"Deploy OK. setup-ssh={setup.ok}; cron={cron_res.ok}: {cron_res.message}"
         self.repo.add_run_history(source_id, "deploy", "ok" if res.ok else "fail", msg)
-        return SSHResult(True, msg, 0, setup.stdout + "\n" + (cron_res.stdout or ""))
+        used = setup.host_used or res.host_used or cron_res.host_used
+        return SSHResult(True, msg, 0, setup.stdout + "\n" + (cron_res.stdout or ""), host_used=used)
 
     @staticmethod
     def _job_names(source: dict[str, Any]) -> tuple[str, str]:
@@ -268,7 +285,7 @@ class DeployService:
                 f"/www/server/panel/pyenv/bin/python3 /tmp/bcc_reg_cron.py; "
                 f"echo '---CRONTAB---'; crontab -l 2>/dev/null | grep -E 'BCC|backup-webs|backup-dbs' || true"
             )
-            return self.ssh.run(
+            result = self.ssh.run(
                 host=source["host"],
                 username=source["username"],
                 command=cmd,
@@ -276,7 +293,10 @@ class DeployService:
                 password=src_pw,
                 sudo_password=src_pw if source["username"] != "root" else "",
                 timeout=120,
+                hosts=self._source_hosts(source),
             )
+            self._note_host(source, result)
+            return result
 
         # plain crontab
         marker = "# bcc-backup-remote"
@@ -288,14 +308,17 @@ class DeployService:
         cmd = (
             f"(crontab -l 2>/dev/null | sed '/{marker}/,/backup-dbs/d'; echo '{block}') | crontab -"
         )
-        return self.ssh.run(
+        result = self.ssh.run(
             host=source["host"],
             username=source["username"],
             command=cmd,
             port=int(source.get("port") or 22),
             password=src_pw,
             sudo_password=src_pw if source["username"] != "root" else "",
+            hosts=self._source_hosts(source),
         )
+        self._note_host(source, result)
+        return result
 
     def push_aapanel_schedule(self, source_id: int) -> SSHResult:
         """

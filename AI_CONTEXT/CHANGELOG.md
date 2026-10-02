@@ -2,6 +2,45 @@
 
 Significant project changes for AI/human handoff. Package builds may exist without git tag.
 
+## 2026-10-02 OMV paths
+
+### Changed
+
+- Backup target keeps Tailscale as `host` for VPS rsync. New `lan_host` is tried first by BCC with a 3-second timeout, then Tailscale.
+- Remote `SSH_OPTS` sends a keepalive every 15 seconds so long rsync sessions stay up. Template version `0.1.2`.
+- OMV `lan_host` set to `192.168.0.110`. VPS `REMOTE_HOST` stays `100.107.205.80`.
+- Redeployed the four VPS so live `config.sh` has the keepalive options. Confirmed on `46.250.233.39`.
+
+### Package
+
+- Bumped build to `19`.
+
+## 2026-10-02 later
+
+### Fixed
+
+- Backup scripts append logs directly, so a finished website backup no longer holds the SSH session open and blocks the database step.
+- Manual full backup starts `backup-all.sh` on the VPS with `nohup` and polls the log. Website then database continue if the PC connection drops.
+- Source SSH tries the last successful address, then the primary host, then `alt_host`, only when connect fails.
+
+### Package
+
+- Bumped build to `18`.
+
+## 2026-10-02
+
+### Changed
+
+- Operator inventory: target `OMV NAS` (`100.107.205.80`, user `aken`) base path corrected from `/home/backupuser/backups` to the 954G data disk `/srv/dev-disk-by-uuid-B004D6B804D68130/NAS/backups`.
+- Registered storage `OMV NAS backups` in review mode. Remote folders `webs`, `dbs`, and `logs` created.
+- Restored four aaPanel VPS sources from the local gitignored seed onto target `OMV NAS`. SSH to each host succeeded. No Windows PC entries existed in that catalog.
+- Redeployed Linux scripts, SSH trust to OMV, and aaPanel web/DB cron on all four sources. Each `setup-ssh` reported success.
+- Bumped package build to `17`.
+
+### Security
+
+- OMV password stored only in the AppData Fernet vault. It is not in git or this changelog.
+
 ## 2026-08-18
 
 ### Added
